@@ -10,7 +10,7 @@ Previous works of predicting human age mainly used DNA methylation data [2,3], s
   
 ## Dataset
 
-The original dataset available in GEO GSE136831 contains scRNA-seq data of 312928 cells across 45,947 genes from the whole lung disassociates of 78 subjects (28 control, 32 IPF, and 18 COPD). Further information regarding the dataset can be found at the paper [7].  In this work of predicting age, we only selected the cells from control subjects assuming it is more probable that the biological age of their lungs matches with their chronological ages. Selecting only the control subjects and removing the cells identified as multiplets by the authors resulted in 95303 cells. The aging information along with sex and race was also obtained from GEO GSE136831 and available in the dataset folder of the repository. 
+The original dataset available in [GEO GSE136831](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE136831) contains scRNA-seq data of 312928 cells across 45,947 genes from the whole lung disassociates of 78 subjects (28 control, 32 IPF, and 18 COPD). Further information regarding the dataset can be found at the paper [7].  In this work of predicting age, we only selected the cells from control subjects assuming it is more probable that the biological age of their lungs matches with their chronological ages. Selecting only the control subjects and removing the cells identified as multiplets by the authors resulted in 95303 cells. The aging information along with sex is also obtained from GEO GSE136831 and available in the dataset folder of the repository. The 28 control subjects ages between 20 to 80 years old.
 
 ## Quality Control
 
