@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'maoss2'
 
+# This is obtained from https://github.com/dizam92/pyTorchReg/blob/master/src/regularization/regularizer.py
 
 class _Regularizer(object):
     """

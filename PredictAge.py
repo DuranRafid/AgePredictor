@@ -1,19 +1,12 @@
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import MinMaxScaler
-import numpy as np
 import pickle
 import gzip
 import pandas as pd
 import sys
-from SubsetGenesDimReducedRegressors import subset_genes_dim_Reduced_Neural_Regression, subset_genes_Dim_Reduced_GPR, \
-    subset_genes_Dim_Reduced_SVR
+from SubsetGenesDimReducedRegressors import subset_genes_Dim_Reduced_ElasticNet, subset_genes_Dim_Reduced_DecisionTreeRegressor,\
+    subset_genes_Dim_Reduced_GPR, subset_genes_Dim_Reduced_RandomForestRegressor, subset_genes_Dim_Reduced_SVR, subset_genes_dim_Reduced_ARDRegression, subset_genes_dim_Reduced_Neural_Regression
 from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel, RBF, RationalQuadratic, ConstantKernel
 from ModelTest import ModelRunner
-from sklearn.linear_model import LinearRegression, ElasticNet
-
-from sklearn.preprocessing import StandardScaler, normalize
-
+from CellExpertEnsembleRegressor import CellExpertStackingRegressor
 
 def load_file(filename):
     if '.csv' in filename:
@@ -50,8 +43,8 @@ class PredictAge(object):
 
     def process_datasets(self):
         self._generate_control_refined(self.meta_data_df)
-        self._filter_bulk_data()
         self._filter_target_data()
+        self._filter_bulk_data()
         self._filter_cell_data()
 
     def _generate_control_refined(self, meta_data_df):
@@ -68,6 +61,7 @@ class PredictAge(object):
     def _filter_bulk_data(self):
         self.bulk_data = self.bulk_data.iloc[:, 1:]
         self.bulk_data = self.bulk_data.apply(lambda x: x * 1000000 / sum(x), axis=0).fillna(0)
+        self.bulk_data = self.bulk_data.loc[:, self.control_subjects]  # Rearrange the subject names in columns
 
     def _filter_target_data(self):
         age_col = 'Age'
@@ -81,13 +75,25 @@ class PredictAge(object):
         self.cell_list = self.control_metadata_df[cell_identity_col_name].unique()
 
         for cell in self.cell_list:
-            cell_df = self.cell_data[cell].apply(lambda x: x * 1000000 / sum(x), axis=0).fillna(0)
+            cell_df = self.cell_data[cell].apply(lambda x: x*10000 / sum(x), axis=0).fillna(0)
             for subject in self.control_subjects:
                 if subject not in cell_df.columns.values:
                     cell_df[subject] = [0 for i in range(cell_df.shape[0])]
             self.cell_data[cell] = cell_df.loc[:, self.control_subjects]  # Rearrange the subject names in columns
 
-    def train_test_models(self):
+    def run_bulk_predictor(self):
+        self.process_datasets()
+        features = self.bulk_data.T
+        print(features)
+        targets = self.ages
+        clf = subset_genes_Dim_Reduced_DecisionTreeRegressor(subset_min=500, subset_fold=500, dimreduced=False, subset_logT=True )
+        drm = ModelRunner(model=clf, features=features, targets=targets)
+        predicted_ages = drm.get_predicted_age()
+
+        print(predicted_ages)
+
+
+    def run_individual_cell_experts(self):
         self.process_datasets()
         pred_age_features = dict()
         pred_age_std = dict()
@@ -96,36 +102,49 @@ class PredictAge(object):
             features = self.cell_data[cell].T
             targets = self.ages
 
-            kernel = DotProduct(sigma_0=1.0) + WhiteKernel(noise_level=0.1)
+            kernel = 0.5**2*DotProduct(sigma_0=1.0)**2 + 0.5*WhiteKernel(noise_level=0.1)
 
-            clf = subset_genes_Dim_Reduced_GPR(kernel=kernel, verbose=False, normalize_y=True, subset_min=200,
-                                               subset_fold=200, ndim=5, subset_logT=True, dimmethod='pca')
-            # clf = subset_genes_Dim_Reduced_SVR(kernel='rbf',degree=5,subset_min=1500,subset_fold=1500,subset_logT=True,ndim=5)
-            # clf = subset_genes_Neural_Regression(subset_min=200, verbose=True,subset_fold=200,ndim=5,subset_logT=True)
-            drm = ModelRunner(model=clf, features=features, targets=targets)
+            clf = subset_genes_Dim_Reduced_GPR(kernel=kernel, verbose=False, normalize_y=True, subset_min=15, varying_genes=True, topgene=50,  subset_fold=15, dimreduced=False, subset_logT=True, dimmethod='pca')
+            #clf = subset_genes_Dim_Reduced_SVR(kernel='rbf',degree=3,subset_min=15,subset_fold=15, subset_logT=True, dimreduced=True,ndim=5)
+            #clf = subset_genes_dim_Reduced_Neural_Regression(subset_min=15, verbose=False,subset_fold=15,varying_genes=True,topgene=50,dimreduced=True,dimension=5,subset_logT=True)
+            #clf = subset_genes_dim_Reduced_ARDRegression(subset_min=15, verbose=False, subset_fold=15,varying_genes=True, topgene=100, dimreduced=False,dimension=10, subset_logT=True)
+            #clf = subset_genes_Dim_Reduced_RandomForestRegressor(subset_logT=True, subset_min=15, varying_genes=True,verbose=True, dimreduced=True, dimension=10, subset_fold=15)
+            drm = ModelRunner(model=clf, features=features, targets=targets,name=f'{cell}GPRRegressor')
             pred_age_features[cell] = drm.get_predicted_age()
+            drm.draw_prediction_line(dir='results')
+
             pred_age_std[cell] = drm.get_prediction_std()
+            #print(pred_age_features[cell])
 
-            print(pred_age_features[cell])
-            break
-
+           # print(pred_age_std[cell])
 
         pred_age_df = pd.DataFrame(pred_age_features).set_index(self.control_subjects)
-        pred_age_df.to_csv('Pred_age_df_genes.csv')
+        pred_age_df.to_csv('SeuratGenesGPR_Pred_age_df_genes.csv')
 
         pred_age_std_df = pd.DataFrame(pred_age_std).set_index(self.control_subjects)
-        pred_age_std_df.to_csv('Pred_age_std_genes.csv')
+        pred_age_std_df.to_csv('SeuratGenesGPR_Pred_age_std_genes.csv')
+
+    def run_ensemble_of_cell_experts(self):
+        self.process_datasets()
+        features = self.cell_data
+        targets = self.ages
+        base = subset_genes_dim_Reduced_ARDRegression(subset_logT=True,dimreduced=False, scanpymethod='seurat',varying_genes=True,topgene=50)
+        clf = CellExpertStackingRegressor(base_estimator=base,
+                                           celllist=['VE_Capillary_B','VE_Venous','VE_Arterial','VE_Peribronchial'])
+        drm = ModelRunner(model=clf, features=features, targets=targets, name='ARDRegressor')
+        drm.leave_one_out_cross_validation_ensemble()
+        print(drm.pred_age)
 
 
 if __name__ == '__main__':
-    dir = ''
-    sys.stdout = open("GaussianProcessForEachCellIdentity.txt", "w")
+    dir = 'C:/CPCB/Ziv Bar Joseph/'
+    #sys.stdout = open("SeuratGenesGPRForEachCellIdentity.txt", "w")
     predictage = PredictAge(metadatafile=dir + 'GSE136831_AllCells.Samples.CellType.MetadataTable.txt.gz',
                             genenamefile=dir + 'GSE136831_AllCells.GeneIDs.txt.gz',
-                            celldatafile=dir + 'All37CellTypeGeneExpression.pkl',
-                            bulk_datafile=dir + 'Control_BulkRNA-seq.csv',
+                            celldatafile=dir + 'data/All37CellTypeGeneExpression.pkl',
+                            bulk_datafile=dir + 'data/Control_BulkRNA-seq.csv',
                             targetfile=dir + 'IPF Control Information.csv')
 
-    predictage.train_test_models()
+    predictage.run_ensemble_of_cell_experts()
 
-    sys.stdout.close()
+   # sys.stdout.close()
