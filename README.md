@@ -2,7 +2,7 @@
 
 This work was done as a CPCB rotation project with Prof. Ziv Bar-Joseph.  
 
-Aging is a vital aspect of human life. Understanding the mechanism of aging on cellular and genomic level is very important to diagnosis and treatment of many diseases, but far from achieved. One very recent study shows that Reversal of biological clock restores vision in old mice [1]. By understanding proper genetic mechanisms of aging in humans, we may lead to similar breakthroughs for human treatments too. 
+Aging is a vital aspect of human life. Comprehension of the mechanism of aging on cellular and genomic level is very important to diagnosis and treatment of many diseases, but is far from being achieved. One very recent study shows that Reversal of biological clock restores vision in old mice [1]. By understanding proper genetic mechanisms of aging in humans, we may lead to similar breakthroughs for human treatments too. 
 
 ### Related Works 
 
